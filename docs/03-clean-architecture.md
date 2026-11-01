@@ -76,15 +76,17 @@
 | `Models.kt`: `User` | учётные данные + права | Domain | разделить на `Credentials` и права |
 | `Models.kt`: `ExitCode` | представление результата для CLI | Adapters | перенести в пакет CLI |
 | `Access.kt`: `parsePath` | формат пути | Domain | превратить в `ResourcePath` |
-| `Access.kt`: `find` | поиск в дереве | Infrastructure / порт `ResourceRepository` | вынести за интерфейс |
+| `Access.kt`: `find` | поиск в дереве | порт `ResourceRepository`: Application; реализация поиска по дереву: Infrastructure (`InMemoryResourceRepository`) | интерфейс объявить в Application, поиск перенести в реализацию |
 | `Access.kt`: `isAllowed` | политика прав | Domain | `PermissionPolicy` |
-| `Auth.kt`: `verify`, `hashHex` | хэширование паролей | интерфейс — Application, реализация — Infrastructure | `PasswordHasher` + `Sha256PasswordHasher` |
+| `Auth.kt`: `verify`, `hashHex` | хэширование паролей | порт `PasswordHasher`: Application; реализация: Infrastructure | `PasswordHasher` (Application) + `Sha256PasswordHasher` (Infrastructure) |
 | `Auth.kt`: `generateSaltHex`, `toHex`, `hexToBytes` | соль, кодирование | Infrastructure | `SaltGenerator`, `HexCodec` |
-| `Data.kt` | данные | Infrastructure | `InMemory*Repository` |
+| `Data.kt` | данные | реализации портов `UserRepository` и `ResourceRepository`: Infrastructure | `InMemoryUserRepository`, `InMemoryResourceRepository` |
 | `Main.kt`: `execute` (проверки) | сценарий | Application | перенести в `CheckAccessUseCase` |
 | `Main.kt`: `parseArgs`, справка | разбор CLI | Adapters | `CliArgumentsParser`, `HelpPrinter` |
 | `Main.kt`: `main`, `exitProcess` | запуск | Infrastructure | оставить, превратить в composition root |
 | `GenHash.kt` | инструмент | вне приложения | переместить в `tools/` |
+
+Правило для всех строк про порты: **интерфейс (порт) принадлежит внутреннему слою Application**, потому что именно сценарий диктует, что ему нужно от внешнего мира; **реализация принадлежит Infrastructure** и зависит от интерфейса, а не наоборот. Так стрелка зависимости направлена внутрь.
 
 ## 4. Целевая структура каталогов и пакетов
 
