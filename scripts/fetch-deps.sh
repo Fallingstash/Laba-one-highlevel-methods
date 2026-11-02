@@ -1,27 +1,38 @@
 #!/bin/bash
-# Скачивает kotlinx-cli в lib/, если его там нет. Можно запускать повторно.
-# Адрес можно переопределить: KOTLINX_CLI_BASE_URL=<каталог с jar и jar.sha1>
+# Скачивает зависимости в lib/, если их там нет. Можно запускать повторно.
+#   bash scripts/fetch-deps.sh cli     только kotlinx-cli (для сборки приложения)
+#   bash scripts/fetch-deps.sh junit   только JUnit (для тестов)
+#   bash scripts/fetch-deps.sh all     всё
+# Зеркало Maven можно подменить: MAVEN_BASE=<адрес> (структура каталогов как в Maven Central).
 set -e
 cd "$(dirname "$0")/.."
 source scripts/config.sh
 
-[ -f "$CLI" ] && exit 0
+# fetch <файл> <адрес>
+fetch() {
+    local target="$1" url="$2"
+    [ -f "$target" ] && return 0
 
-BASE_URL="${KOTLINX_CLI_BASE_URL:-https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-cli-jvm/$CLI_VERSION}"
-URL="$BASE_URL/kotlinx-cli-jvm-$CLI_VERSION.jar"
+    echo "Скачиваю $(basename "$target") ..."
+    mkdir -p lib
+    curl -fsSL -o "$target.tmp" "$url"
 
-echo "Скачиваю kotlinx-cli $CLI_VERSION ..."
-mkdir -p lib
-curl -fsSL -o "$CLI.tmp" "$URL"
+    # проверка целостности по SHA-1, который публикует Maven Central рядом с jar
+    local expected actual
+    expected=$(curl -fsSL "$url.sha1" | awk '{print $1}')
+    actual=$(sha1sum "$target.tmp" | awk '{print $1}')
+    if [ "$expected" != "$actual" ]; then
+        rm -f "$target.tmp"
+        echo "Контрольная сумма не совпала для $(basename "$target"): ожидали $expected, получили $actual" >&2
+        exit 1
+    fi
 
-# проверка целостности по SHA-1, который публикует Maven Central рядом с jar
-expected=$(curl -fsSL "$URL.sha1" | awk '{print $1}')
-actual=$(sha1sum "$CLI.tmp" | awk '{print $1}')
-if [ "$expected" != "$actual" ]; then
-    rm -f "$CLI.tmp"
-    echo "Контрольная сумма kotlinx-cli не совпала: ожидали $expected, получили $actual" >&2
-    exit 1
-fi
+    mv "$target.tmp" "$target"
+}
 
-mv "$CLI.tmp" "$CLI"
-echo "Скачано: $CLI"
+case "${1:-cli}" in
+    cli)   fetch "$CLI" "$CLI_URL" ;;
+    junit) fetch "$JUNIT" "$JUNIT_URL" ;;
+    all)   fetch "$CLI" "$CLI_URL"; fetch "$JUNIT" "$JUNIT_URL" ;;
+    *)     echo "Использование: fetch-deps.sh [cli|junit|all]" >&2; exit 2 ;;
+esac

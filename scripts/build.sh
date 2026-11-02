@@ -4,9 +4,9 @@
 set -e
 cd "$(dirname "$0")/.."
 source scripts/config.sh
-bash scripts/fetch-deps.sh
+bash scripts/fetch-deps.sh cli
 
-rm -rf build app.jar
+rm -rf build/classes build/app-tmp.jar app.jar
 mkdir -p build/classes
 
 # все исходники приложения; tools/ и tests/ в сборку не входят
