@@ -19,5 +19,6 @@ object HelpPrinter {
           8 превышен максимальный объём
     """.trimIndent()
 
-    fun print() = println(TEXT)
+    /** Текст справки (отдельно от вывода, чтобы его можно было проверять в тестах). */
+    fun text(): String = TEXT
 }

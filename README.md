@@ -17,7 +17,7 @@
 * JDK с утилитой `jar` (проверено на 25)
 * Компилятор `kotlinc` (проверено на 2.4.20)
 * Bash: Git Bash или WSL
-* Доступ в интернет при первой сборке: скрипт сам скачивает `kotlinx-cli` 0.3.6 в `lib/` с Maven Central и сверяет SHA-1 (см. `scripts/fetch-deps.sh`); в репозиторий jar не добавляется
+* Доступ в интернет при первой сборке: скрипт сам скачивает `kotlinx-cli` 0.3.6 и (для тестов) `junit-platform-console-standalone` 1.12.2 в `lib/` с Maven Central и сверяет SHA-1 (см. `scripts/fetch-deps.sh`); в репозиторий jar не добавляются
 
 ## Структура проекта
 
@@ -26,14 +26,14 @@ src/
 ├── domain/            предметная область: Action, ResourcePath, Resource, Grant, UserAccount, PermissionPolicy
 ├── application/       сценарий CheckAccessUseCase, AccessRequest, AccessResult
 │   └── port/          интерфейсы: UserRepository, ResourceRepository, PasswordHasher
-├── adapter/cli/       разбор аргументов, справка, коды возврата (ExitCode, ExitCodeMapper)
+├── adapter/cli/       разбор аргументов, справка, запуск (CliRunner), коды возврата (ExitCode, ExitCodeMapper)
 ├── infrastructure/    данные в коде, SHA-256, генерация соли, hex
 └── Main.kt            точка входа и сборка зависимостей (composition root)
 tools/GenHash.kt       инструмент: соль и хэш для пары логин/пароль (в приложение не входит)
-tests/UseCaseTest.kt   модульные тесты сценария с поддельными репозиториями
-scripts/               build.sh, run.sh, test.sh, unit-test.sh, fetch-deps.sh, config.sh
-lib/                   сюда скачивается kotlinx-cli (в git не хранится)
-docs/                  анализ SOLID, планы рефакторинга, архитектуры и SonarCloud
+tests/                 модульные тесты JUnit 5 (структура пакетов повторяет src/)
+scripts/               build.sh, run.sh, test.sh, build-tests.sh, run-tests.sh, fetch-deps.sh, config.sh
+lib/                   сюда скачиваются kotlinx-cli и JUnit (в git не хранятся)
+docs/                  анализ SOLID, планы, отчёт о тестопригодности (testable.md)
 ```
 
 Зависимости направлены внутрь: `domain` и `application` не используют `kotlinx.cli`, `java.security`, `println` и `exitProcess`.
@@ -107,9 +107,13 @@ Docs (200)
 ## Тесты
 
 ```bash
-bash scripts/test.sh        # сквозные: запускают app.jar и проверяют код ответа (13 кейсов)
-bash scripts/unit-test.sh   # модульные: сценарий с поддельными репозиториями (15 кейсов)
+bash scripts/run-tests.sh   # модульные: собирает и запускает 159 тестов JUnit 5
+bash scripts/test.sh        # сквозные: запускают app.jar и проверяют код ответа (13 кейсов, нужна сборка)
 ```
+
+* `scripts/build-tests.sh` компилирует `src/` и `tests/` в `build/tests.jar`, `scripts/run-tests.sh` вызывает его и запускает консольный лаунчер JUnit (отчёты в `build/reports`).
+* Один класс: `bash scripts/run-tests.sh --select-class domain.ResourcePathTest`.
+* Анализ тестопригодности, список сценариев, результаты и что не тестируется: `docs/testable.md`.
 
 ## Принятые решения
 
