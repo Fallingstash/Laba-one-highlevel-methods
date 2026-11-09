@@ -1,16 +1,27 @@
 import adapter.cli.CliRunner
 import application.CheckAccessUseCase
-import infrastructure.InMemoryResourceRepository
-import infrastructure.InMemoryUserRepository
 import infrastructure.Sha256PasswordHasher
+import infrastructure.jdbc.Database
+import infrastructure.jdbc.DatabaseUrls
+import infrastructure.jdbc.JdbcResourceRepository
+import infrastructure.jdbc.JdbcUserRepository
 import kotlin.system.exitProcess
 
-/** Точка входа и composition root: создаёт объекты, запускает сценарий и завершает процесс. */
+private const val DEFAULT_DB_PATH = "./data/access"
+
+/** Точка входа и composition root: создаёт объекты, запускает сценарий, закрывает базу и завершает процесс. */
 fun main(args: Array<String>) {
-    val useCase = CheckAccessUseCase(
-        users = InMemoryUserRepository(),
-        resources = InMemoryResourceRepository(),
-        hasher = Sha256PasswordHasher()
-    )
-    exitProcess(CliRunner(useCase).run(args).code)
+    val dbPath = System.getenv("ACCESS_DB_PATH") ?: DEFAULT_DB_PATH
+
+    // exitProcess вызывается ПОСЛЕ use, иначе соединение с базой не закрылось бы
+    val exitCode = Database(DatabaseUrls.h2File(dbPath)).use { database ->
+        val useCase = CheckAccessUseCase(
+            users = JdbcUserRepository(database),
+            resources = JdbcResourceRepository(database),
+            hasher = Sha256PasswordHasher()
+        )
+        CliRunner(useCase).run(args)
+    }
+
+    exitProcess(exitCode.code)
 }

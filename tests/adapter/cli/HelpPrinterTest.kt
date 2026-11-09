@@ -19,6 +19,18 @@ class HelpPrinterTest {
     }
 
     @Test
+    fun shouldDescribeDatabaseErrorCodes() {
+        assertTrue(text.contains("9 ошибка подключения к базе данных"))
+        assertTrue(text.contains("10 ошибка SQL-запроса"))
+    }
+
+    @Test
+    fun shouldExplainHowToChooseDatabaseFile() {
+        assertTrue(text.contains("ACCESS_DB_PATH"))
+        assertTrue(text.contains("init-db.sh"))
+    }
+
+    @Test
     fun shouldShowUsageExample() {
         assertTrue(text.contains("java -jar app.jar"))
     }

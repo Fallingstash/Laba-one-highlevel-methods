@@ -2,6 +2,8 @@ package application
 
 import application.port.PasswordHasher
 import application.port.ResourceRepository
+import application.port.StorageException
+import application.port.StorageFailureKind
 import application.port.UserRepository
 import domain.Credentials
 import domain.Resource
@@ -27,4 +29,16 @@ class FakePasswordHasher : PasswordHasher {
         calls++
         return credentials.hashHex == "hash:$password"
     }
+}
+
+/** Репозиторий пользователей, который всегда падает с заданным сбоем хранилища. */
+class FailingUserRepository(private val kind: StorageFailureKind) : UserRepository {
+    override fun findByLogin(login: String): UserAccount? =
+        throw StorageException(kind, "тестовый сбой хранилища")
+}
+
+/** Репозиторий ресурсов, который всегда падает с заданным сбоем хранилища. */
+class FailingResourceRepository(private val kind: StorageFailureKind) : ResourceRepository {
+    override fun find(path: ResourcePath): Resource? =
+        throw StorageException(kind, "тестовый сбой хранилища")
 }

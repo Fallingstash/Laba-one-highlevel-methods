@@ -2,3 +2,4 @@ app.jar
 build/
 out/
 lib/*.jar
+data/

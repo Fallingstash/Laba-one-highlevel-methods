@@ -1,24 +1,34 @@
 package adapter.cli
 
 import application.CheckAccessUseCase
-import infrastructure.InMemoryResourceRepository
-import infrastructure.InMemoryUserRepository
 import infrastructure.Sha256PasswordHasher
+import infrastructure.jdbc.Database
+import infrastructure.jdbc.DatabaseUrls
+import infrastructure.jdbc.JdbcResourceRepository
+import infrastructure.jdbc.JdbcUserRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import support.TestDatabase
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
+import java.nio.file.Files
 
-/** Сквозные проверки «аргументы -> код ответа» внутри процесса: реальные данные, без exitProcess. */
+/**
+ * Сквозные проверки «аргументы -> код ответа» внутри процесса: настоящий JDBC и H2 в памяти
+ * со схемой и данными из scripts/init.sql и scripts/fill.sql, без exitProcess.
+ */
 class CliRunnerTest {
 
     private val buffer = ByteArrayOutputStream()
-    private val runner = CliRunner(
-        CheckAccessUseCase(InMemoryUserRepository(), InMemoryResourceRepository(), Sha256PasswordHasher()),
+
+    private fun runnerFor(database: Database) = CliRunner(
+        CheckAccessUseCase(
+            JdbcUserRepository(database), JdbcResourceRepository(database), Sha256PasswordHasher()
+        ),
         PrintStream(buffer, true, "UTF-8")
     )
 
-    private fun run(vararg args: String): ExitCode = runner.run(arrayOf(*args))
+    private val runner = runnerFor(TestDatabase.filled())
 
     private fun request(
         login: String = "alice", password: String = "qwerty", action: String = "read",
@@ -30,6 +40,9 @@ class CliRunnerTest {
 
     private fun output() = buffer.toString("UTF-8")
 
+    private fun missingDatabase() =
+        Database(DatabaseUrls.h2File(Files.createTempDirectory("lab-db").resolve("missing").toString()))
+
     // ---------- по одному сценарию на каждый код ответа ----------
 
     @Test
@@ -39,7 +52,7 @@ class CliRunnerTest {
 
     @Test
     fun shouldReturnHelpCodeWhenHelpIsRequested() {
-        assertEquals(ExitCode.HELP, run("--help"))
+        assertEquals(ExitCode.HELP, runner.run(arrayOf("--help")))
     }
 
     @Test
@@ -77,6 +90,16 @@ class CliRunnerTest {
         assertEquals(ExitCode.VOLUME_EXCEEDED, runner.run(request(volume = "21")))
     }
 
+    @Test
+    fun shouldReturnDbConnectionErrorWhenDatabaseFileDoesNotExist() {
+        assertEquals(ExitCode.DB_CONNECTION_ERROR, runnerFor(missingDatabase()).run(request()))
+    }
+
+    @Test
+    fun shouldReturnDbQueryErrorWhenTablesAreMissing() {
+        assertEquals(ExitCode.DB_QUERY_ERROR, runnerFor(TestDatabase.empty()).run(request()))
+    }
+
     // ---------- граничные случаи и «тихая» работа ----------
 
     @Test
@@ -86,7 +109,7 @@ class CliRunnerTest {
 
     @Test
     fun shouldReturnHelpCodeWhenArgumentsAreMalformed() {
-        assertEquals(ExitCode.HELP, run("--bogus"))
+        assertEquals(ExitCode.HELP, runner.run(arrayOf("--bogus")))
     }
 
     @Test
@@ -102,14 +125,31 @@ class CliRunnerTest {
     }
 
     @Test
+    fun shouldPrintNothingWhenDatabaseIsUnreachable() {
+        runnerFor(missingDatabase()).run(request())
+        assertEquals("", output())
+    }
+
+    @Test
+    fun shouldPrintNothingWhenSqlQueryFails() {
+        runnerFor(TestDatabase.empty()).run(request())
+        assertEquals("", output())
+    }
+
+    @Test
+    fun shouldNotTouchDatabaseWhenHelpIsRequested() {
+        assertEquals(ExitCode.HELP, runnerFor(missingDatabase()).run(arrayOf("-h")))
+    }
+
+    @Test
     fun shouldPrintHelpTextWhenHelpIsRequested() {
-        run("-h")
+        runner.run(arrayOf("-h"))
         assertEquals(HelpPrinter.text(), output().trim())
     }
 
     @Test
     fun shouldPrintApplicationHelpWhenArgumentsAreMalformed() {
-        run("--login", "alice")
+        runner.run(arrayOf("--login", "alice"))
         assertEquals(HelpPrinter.text(), output().trim())
     }
 }

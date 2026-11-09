@@ -2,6 +2,7 @@ package application
 
 import application.port.PasswordHasher
 import application.port.ResourceRepository
+import application.port.StorageException
 import application.port.UserRepository
 import domain.Action
 import domain.PermissionPolicy
@@ -13,7 +14,14 @@ class CheckAccessUseCase(
     private val resources: ResourceRepository,
     private val hasher: PasswordHasher
 ) {
-    fun check(request: AccessRequest): AccessResult {
+    fun check(request: AccessRequest): AccessResult =
+        try {
+            evaluate(request)
+        } catch (e: StorageException) {
+            AccessResult.StorageFailure(e.kind)
+        }
+
+    private fun evaluate(request: AccessRequest): AccessResult {
         val user = users.findByLogin(request.login) ?: return deny(DenyReason.UNKNOWN_LOGIN)
         if (!hasher.verify(request.password, user.credentials)) return deny(DenyReason.WRONG_PASSWORD)
 

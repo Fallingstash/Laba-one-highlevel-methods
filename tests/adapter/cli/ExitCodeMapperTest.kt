@@ -2,6 +2,7 @@ package adapter.cli
 
 import application.AccessResult
 import application.DenyReason
+import application.port.StorageFailureKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
@@ -51,6 +52,23 @@ class ExitCodeMapperTest {
     }
 
     @Test
+    fun shouldMapConnectionFailureToDbConnectionError() {
+        assertEquals(ExitCode.DB_CONNECTION_ERROR, ExitCodeMapper.map(AccessResult.StorageFailure(StorageFailureKind.CONNECTION)))
+    }
+
+    @Test
+    fun shouldMapQueryFailureToDbQueryError() {
+        assertEquals(ExitCode.DB_QUERY_ERROR, ExitCodeMapper.map(AccessResult.StorageFailure(StorageFailureKind.QUERY)))
+    }
+
+    @Test
+    fun shouldMapEveryStorageFailureKindToItsOwnNonZeroCode() {
+        val codes = StorageFailureKind.values().map { ExitCodeMapper.map(AccessResult.StorageFailure(it)) }
+        assertEquals(codes.size, codes.toSet().size)
+        assertNotEquals(ExitCode.OK, codes.first())
+    }
+
+    @Test
     fun shouldNeverMapAnyDenyReasonToOk() {
         DenyReason.values().forEach { assertNotEquals(ExitCode.OK, mapDenied(it), "причина $it") }
     }
@@ -66,13 +84,14 @@ class ExitCodeMapperTest {
         val expected = mapOf(
             ExitCode.OK to 0, ExitCode.HELP to 1, ExitCode.WRONG_PASSWORD to 2,
             ExitCode.WRONG_LOGIN to 3, ExitCode.UNKNOWN_ACTION to 4, ExitCode.NO_ACCESS to 5,
-            ExitCode.NO_RESOURCE to 6, ExitCode.BAD_FORMAT to 7, ExitCode.VOLUME_EXCEEDED to 8
+            ExitCode.NO_RESOURCE to 6, ExitCode.BAD_FORMAT to 7, ExitCode.VOLUME_EXCEEDED to 8,
+            ExitCode.DB_CONNECTION_ERROR to 9, ExitCode.DB_QUERY_ERROR to 10
         )
         expected.forEach { (exitCode, number) -> assertEquals(number, exitCode.code, "код $exitCode") }
     }
 
     @Test
-    fun shouldHaveExactlyNineExitCodes() {
-        assertEquals((0..8).toList(), ExitCode.values().map { it.code }.sorted())
+    fun shouldHaveExactlyElevenExitCodes() {
+        assertEquals((0..10).toList(), ExitCode.values().map { it.code }.sorted())
     }
 }
