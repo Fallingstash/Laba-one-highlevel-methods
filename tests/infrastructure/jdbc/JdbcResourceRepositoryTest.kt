@@ -1,14 +1,22 @@
-package infrastructure
+package infrastructure.jdbc
 
+import application.port.StorageException
+import application.port.StorageFailureKind
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import support.TestDatabase
 import support.path
 
-class InMemoryResourceRepositoryTest {
+class JdbcResourceRepositoryTest {
 
-    private val repository = InMemoryResourceRepository()
+    private val database = TestDatabase.filled()
+    private val repository = JdbcResourceRepository(database)
+
+    @AfterEach
+    fun closeDatabase() = database.close()
 
     @Test
     fun shouldFindTopLevelResourceWithItsMaximumVolume() {
@@ -48,6 +56,19 @@ class InMemoryResourceRepositoryTest {
     @Test
     fun shouldBeCaseSensitiveWhenSearchingResources() {
         assertNull(repository.find(path("a")))
-        assertNotNull(repository.find(path("A")))
+    }
+
+    @Test
+    fun shouldReportQueryFailureWhenTablesAreMissing() {
+        val broken = JdbcResourceRepository(TestDatabase.empty())
+        val error = assertThrows(StorageException::class.java) { broken.find(path("A")) }
+        assertEquals(StorageFailureKind.QUERY, error.kind)
+    }
+
+    @Test
+    fun shouldReportConnectionFailureWhenDatabaseIsUnreachable() {
+        val broken = JdbcResourceRepository(Database("jdbc:h2:file:/nonexistent-dir/x;IFEXISTS=TRUE"))
+        val error = assertThrows(StorageException::class.java) { broken.find(path("A")) }
+        assertEquals(StorageFailureKind.CONNECTION, error.kind)
     }
 }

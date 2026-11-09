@@ -1,8 +1,9 @@
 #!/bin/bash
 # Скачивает зависимости в lib/, если их там нет. Можно запускать повторно.
-#   bash scripts/fetch-deps.sh cli     только kotlinx-cli (для сборки приложения)
-#   bash scripts/fetch-deps.sh junit   только JUnit (для тестов)
-#   bash scripts/fetch-deps.sh all     всё
+#   bash scripts/fetch-deps.sh app    kotlinx-cli и драйвер H2 (для сборки и запуска приложения)
+#   bash scripts/fetch-deps.sh h2     только H2 (для init-db.sh)
+#   bash scripts/fetch-deps.sh junit  только JUnit (для тестов)
+#   bash scripts/fetch-deps.sh all    всё
 # Зеркало Maven можно подменить: MAVEN_BASE=<адрес> (структура каталогов как в Maven Central).
 set -e
 cd "$(dirname "$0")/.."
@@ -30,9 +31,10 @@ fetch() {
     mv "$target.tmp" "$target"
 }
 
-case "${1:-cli}" in
-    cli)   fetch "$CLI" "$CLI_URL" ;;
+case "${1:-app}" in
+    app)   fetch "$CLI" "$CLI_URL"; fetch "$H2" "$H2_URL" ;;
+    h2)    fetch "$H2" "$H2_URL" ;;
     junit) fetch "$JUNIT" "$JUNIT_URL" ;;
-    all)   fetch "$CLI" "$CLI_URL"; fetch "$JUNIT" "$JUNIT_URL" ;;
-    *)     echo "Использование: fetch-deps.sh [cli|junit|all]" >&2; exit 2 ;;
+    all)   fetch "$CLI" "$CLI_URL"; fetch "$H2" "$H2_URL"; fetch "$JUNIT" "$JUNIT_URL" ;;
+    *)     echo "Использование: fetch-deps.sh [app|h2|junit|all]" >&2; exit 2 ;;
 esac

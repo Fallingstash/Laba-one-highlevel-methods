@@ -11,6 +11,6 @@ mkdir -p build
 
 mapfile -t SOURCES < <(find src -name '*.kt')
 mapfile -t TESTS < <(find tests -name '*.kt')
-kotlinc $KOTLINC_OPTS -cp "$CLI$SEP$JUNIT" "${SOURCES[@]}" "${TESTS[@]}" -include-runtime -d build/tests.jar
+kotlinc $KOTLINC_OPTS -cp "$CLI$SEP$JUNIT$SEP$H2" "${SOURCES[@]}" "${TESTS[@]}" -include-runtime -d build/tests.jar
 
 echo "Собрано: build/tests.jar"

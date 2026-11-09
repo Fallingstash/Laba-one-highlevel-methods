@@ -1,4 +1,4 @@
-# Лабораторная работа. Консольное приложение для доступа к ресурсам (после рефакторинга)
+# Консольное приложение для доступа к ресурсам (данные в базе H2)
 
 ## Авторы
 
@@ -8,16 +8,18 @@
 ## Описание
 
 Консольное приложение на Kotlin проверяет, может ли пользователь выполнить действие над ресурсом.
+Пользователи, дерево ресурсов и права хранятся во встроенной файловой базе данных H2 и читаются через стандартный JDBC (`java.sql`, без ORM).
 Программа работает «тихо»: выводит только справку, в остальных случаях возвращает статус-код.
-Пароли хранятся как SHA-256 с индивидуальной случайной солью, сравнение хэшей выполняется за постоянное время.
-Все данные (пользователи, дерево ресурсов, права) хранятся в коде.
+Пароли хранятся как SHA-256 с индивидуальной случайной солью.
+
+Подробности: схема и ER-диаграмма, выбор СУБД, изменения в коде в `doc/lab6/sql-plan.md`.
 
 ## Требования к окружению
 
 * JDK с утилитой `jar` (проверено на 25)
 * Компилятор `kotlinc` (проверено на 2.4.20)
 * Bash: Git Bash или WSL
-* Доступ в интернет при первой сборке: скрипт сам скачивает `kotlinx-cli` 0.3.6 и (для тестов) `junit-platform-console-standalone` 1.12.2 в `lib/` с Maven Central и сверяет SHA-1 (см. `scripts/fetch-deps.sh`); в репозиторий jar не добавляются
+* Доступ в интернет при первом запуске: скрипты сами скачивают в `lib/` `kotlinx-cli` 0.3.6, драйвер H2 2.2.220 и (для тестов) JUnit 1.12.2 с Maven Central и сверяют SHA-1 (`scripts/fetch-deps.sh`). Jar-файлы в репозиторий не добавляются.
 
 ## Структура проекта
 
@@ -25,39 +27,39 @@
 src/
 ├── domain/            предметная область: Action, ResourcePath, Resource, Grant, UserAccount, PermissionPolicy
 ├── application/       сценарий CheckAccessUseCase, AccessRequest, AccessResult
-│   └── port/          интерфейсы: UserRepository, ResourceRepository, PasswordHasher
+│   └── port/          интерфейсы: UserRepository, ResourceRepository, PasswordHasher, StorageException
 ├── adapter/cli/       разбор аргументов, справка, запуск (CliRunner), коды возврата (ExitCode, ExitCodeMapper)
-├── infrastructure/    данные в коде, SHA-256, генерация соли, hex
+├── infrastructure/    SHA-256, генерация соли, hex
+│   └── jdbc/          Database, DatabaseUrls, JdbcUserRepository, JdbcResourceRepository
 └── Main.kt            точка входа и сборка зависимостей (composition root)
-tools/GenHash.kt       инструмент: соль и хэш для пары логин/пароль (в приложение не входит)
+scripts/
+├── init.sql           схема базы
+├── fill.sql           тестовые данные
+├── init-db.sh         создание и заполнение базы
+└── build.sh, run.sh, test.sh, build-tests.sh, run-tests.sh, fetch-deps.sh, config.sh
 tests/                 модульные тесты JUnit 5 (структура пакетов повторяет src/)
-scripts/               build.sh, run.sh, test.sh, build-tests.sh, run-tests.sh, fetch-deps.sh, config.sh
-lib/                   сюда скачиваются kotlinx-cli и JUnit (в git не хранятся)
-docs/                  анализ SOLID, планы, отчёт о тестопригодности (testable.md)
+tools/GenHash.kt       инструмент: соль и хэш для пары логин/пароль (в приложение не входит)
+doc/                   lab2 (анализ SOLID, планы), lab5 (testable.md), lab6 (sql-plan.md)
+lib/                   сюда скачиваются зависимости (в git не хранятся)
+data/                  файл базы H2 (создаётся init-db.sh, в git не хранится)
 ```
 
-Зависимости направлены внутрь: `domain` и `application` не используют `kotlinx.cli`, `java.security`, `println` и `exitProcess`.
-Проверка: `grep -rn "kotlinx.cli\|exitProcess\|java.security\|println" src/domain src/application` ничего не находит.
+`domain` и `application` не используют `java.sql`, `kotlinx.cli`, `println` и `exitProcess`.
+Проверка: `grep -rn "java.sql\|kotlinx.cli\|exitProcess\|println" src/domain src/application` ничего не находит.
 
-## Сборка
-
-```bash
-bash scripts/build.sh
-```
-
-При первом запуске скрипт скачивает `kotlinx-cli` (если его нет в `lib/`). Результат: `app.jar` в корне проекта (в репозиторий не добавляется, см. `.gitignore`).
-Без интернета: положить `kotlinx-cli-jvm-0.3.6.jar` в `lib/` вручную, тогда скачивание пропускается.
-Дополнительные опции компилятора можно передать через переменную `KOTLINC_OPTS`, например `KOTLINC_OPTS="-jvm-target 17" bash scripts/build.sh`.
-
-## Запуск
+## Быстрый старт
 
 ```bash
+bash scripts/init-db.sh      # создать и заполнить базу (data/access.mv.db)
+bash scripts/build.sh        # собрать app.jar
 java -jar app.jar --login alice --password qwerty --action read --resource A.B.C --volume 10
-# или
-bash scripts/run.sh --login alice --password qwerty --action read --resource A.B.C --volume 10
+echo $?                      # 0
 ```
 
-Код ответа: `echo $?`.
+Файл базы по умолчанию `./data/access.mv.db` (путь считается от текущего каталога, поэтому запускать из корня проекта). Другой файл: переменная окружения `ACCESS_DB_PATH` (путь без расширения), её понимают и приложение, и `init-db.sh`.
+
+Без интернета: положить `kotlinx-cli-jvm-0.3.6.jar`, `h2-2.2.220.jar` (и для тестов `junit-platform-console-standalone-1.12.2.jar`) в `lib/` вручную, тогда скачивание пропускается.
+Дополнительные опции компилятора можно передать через `KOTLINC_OPTS`, например `KOTLINC_OPTS="-jvm-target 17" bash scripts/build.sh`.
 
 ### Аргументы
 
@@ -85,8 +87,10 @@ bash scripts/run.sh --login alice --password qwerty --action read --resource A.B
 | Несуществующий ресурс | 6 |
 | Некорректный формат ресурса или объёма | 7 |
 | Превышение максимального объёма | 8 |
+| Ошибка подключения к базе данных | 9 |
+| Ошибка SQL-запроса | 10 |
 
-## Тестовые данные
+## Тестовые данные (`scripts/fill.sql`)
 
 ```
 A (100)
@@ -102,25 +106,28 @@ Docs (200)
 | `alice` | `qwerty` | `A`: read, write |
 | `bob` | `hunter2` | `A.B`: read; `Docs`: execute |
 
-Новые пароли добавляются так: `kotlinc` собирает `GenHash` вместе с `src`, `kotlin -cp <каталог> GenHash <логин> <пароль>` печатает соль и хэш, их вписывают в `InMemoryUserRepository`.
+Новый пользователь: собрать `tools/GenHash.kt` вместе с `src/` через `kotlinc`, выполнить `kotlin -cp <каталог> GenHash <логин> <пароль>` и вписать соль и хэш в `scripts/fill.sql`.
 
 ## Тесты
 
 ```bash
-bash scripts/run-tests.sh   # модульные: собирает и запускает 159 тестов JUnit 5
-bash scripts/test.sh        # сквозные: запускают app.jar и проверяют код ответа (13 кейсов, нужна сборка)
+bash scripts/run-tests.sh   # модульные: 217 тестов JUnit 5 на H2 в памяти
+bash scripts/test.sh        # сквозные: создают тестовую базу в build/test-db, запускают app.jar (16 кейсов, нужна сборка)
 ```
 
-* `scripts/build-tests.sh` компилирует `src/` и `tests/` в `build/tests.jar`, `scripts/run-tests.sh` вызывает его и запускает консольный лаунчер JUnit (отчёты в `build/reports`).
+* Модульные тесты используют `scripts/init.sql` и `scripts/fill.sql`, поэтому проверяются и SQL, и схема.
 * Один класс: `bash scripts/run-tests.sh --select-class domain.ResourcePathTest`.
-* Анализ тестопригодности, список сценариев, результаты и что не тестируется: `docs/testable.md`.
+* Отчёт о тестопригодности: `doc/lab5/testable.md`.
 
 ## Принятые решения
 
-* Доступ по умолчанию закрыт; право на родителя действует на всех потомков, право на потомка не даёт доступа к родителю.
+* Доступ по умолчанию закрыт; право на родителя действует на всех потомков, право на потомка не даёт доступа к родителю (правило в `PermissionPolicy`, в базе наследование не хранится).
 * Права сравниваются по сегментам пути, поэтому право на `A.B` не распространяется на `A.BX`.
-* `kotlinx-cli` при ошибке аргументов сам завершает процесс с кодом 127, поэтому форма аргументов (пять пар «флаг значение») проверяется до вызова библиотеки; при ошибке выводится справка приложения и возвращается код 1.
+* `kotlinx-cli` при ошибке аргументов сам завершает процесс с кодом 127, поэтому форма аргументов проверяется до вызова библиотеки; при ошибке выводится справка и возвращается код 1.
 * Значения `--action` и `--volume` читаются как строки и проверяются сценарием, чтобы получать коды 4 и 7.
 * Объём `0` допустим; отрицательный и нечисловой объём даёт код 7.
+* Подключение к базе ленивое: справка (`-h`) работает без базы.
+* `IFEXISTS=TRUE` в URL: отсутствие файла базы это ошибка подключения (код 9), а не молчаливое создание пустой базы.
+* Пока база недоступна, код 9 или 10 возвращается раньше проверок формата (пользователя ищут первым).
+* Встроенная H2 открывается одним процессом: два одновременных запуска на одном файле дадут второму код 9.
 * Значение аргумента `-h` или `--help` (например, пароль) воспринимается как запрос справки.
-* Порядок проверок: логин, пароль, действие, формат пути и объёма, существование ресурса, права, объём.
